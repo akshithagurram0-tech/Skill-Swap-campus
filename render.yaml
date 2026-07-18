@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: skillswap-backend
+    runtime: python
+    plan: free
+    buildCommand: pip install -r Backend/requirements.txt
+    startCommand: cd Backend && gunicorn --worker-class eventlet -w 1 wsgi:app
+    envVars:
+      - key: MONGO_URI
+        sync: false
+      - key: DB_NAME
+        value: SkillSwapCampus
+      - key: JWT_SECRET_KEY
+        sync: false
+      - key: FLASK_DEBUG
+        value: "False"
+      - key: FRONTEND_URL
+        sync: false
+      - key: SOCKETIO_ASYNC_MODE
+        value: eventlet
+      - key: PYTHON_VERSION
+        value: 3.11.9
