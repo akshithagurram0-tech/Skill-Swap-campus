@@ -6,4 +6,3 @@ bcrypt
 PyJWT
 flask-socketio
 simple-websocket
-eventlet

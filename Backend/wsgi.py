@@ -1,9 +1,6 @@
 import os
-import eventlet
-eventlet.monkey_patch()
-
-from app import app  # noqa: E402
-from extensions import socketio  # noqa: E402
+from app import app
+from extensions import socketio
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
