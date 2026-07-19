@@ -1,19 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import api from "../api";
-import { createSocket } from "../socket";
 import { useAuth } from "../context/AuthContext";
+import { useSocketContext } from "../context/SocketContext";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:5000";
 
 export default function ChatPage() {
     const { userId } = useParams();
     const location = useLocation();
-    const { user, token } = useAuth();
+    const { user } = useAuth();
+    const { socketRef, clearNotificationsFor } = useSocketContext();
     const [messages, setMessages] = useState([]);
     const [text, setText] = useState("");
     const [uploadError, setUploadError] = useState("");
-    const socketRef = useRef(null);
     const bottomRef = useRef(null);
     const fileInputRef = useRef(null);
 
@@ -26,20 +26,30 @@ export default function ChatPage() {
         }
         loadHistory();
 
-        const socket = createSocket(token);
-        socketRef.current = socket;
-        socket.connect();
+        clearNotificationsFor(userId);
 
-        socket.on("connect", () => {
+        const socket = socketRef.current;
+        if (!socket) return undefined;
+
+        function joinConversation() {
             socket.emit("join_conversation", { with_user_id: userId });
-        });
+        }
 
-        socket.on("new_message", (msg) => {
+        socket.on("connect", joinConversation);
+        if (socket.connected) joinConversation();
+
+        function handleNewMessage(msg) {
             setMessages((prev) => [...prev, msg]);
-        });
+            if (msg.sender_id === userId) {
+                clearNotificationsFor(userId);
+            }
+        }
+
+        socket.on("new_message", handleNewMessage);
 
         return () => {
-            socket.disconnect();
+            socket.off("connect", joinConversation);
+            socket.off("new_message", handleNewMessage);
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userId]);

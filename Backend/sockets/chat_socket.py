@@ -5,7 +5,7 @@ from flask_socketio import join_room
 
 from config import JWT_SECRET_KEY
 from extensions import socketio
-from database.db import messages
+from database.db import messages, users
 from models.message_model import new_message_document, serialize_message
 from services.chat_service import has_match_between, room_name
 
@@ -25,6 +25,9 @@ def handle_connect(auth):
         return False
 
     sid_to_user[request.sid] = payload["user_id"]
+    # Personal room, keyed by user id, so notifications can reach this user
+    # regardless of which conversation/call rooms they've joined.
+    join_room(payload["user_id"])
 
 
 @socketio.on("disconnect")
@@ -60,3 +63,10 @@ def handle_send_message(data):
     doc["_id"] = result.inserted_id
 
     socketio.emit("new_message", serialize_message(doc), room=room_name(my_id, other_id))
+
+    sender = users.find_one({"_id": ObjectId(my_id)})
+    socketio.emit("message_notification", {
+        "from": my_id,
+        "from_name": sender.get("name") if sender else "Someone",
+        "preview": text[:80]
+    }, room=other_id)

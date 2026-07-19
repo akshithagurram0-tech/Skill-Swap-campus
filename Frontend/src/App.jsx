@@ -5,10 +5,12 @@ import DashboardPage from "./pages/DashboardPage";
 import ChatPage from "./pages/ChatPage";
 import CallPage from "./pages/CallPage";
 import ProtectedRoute from "./components/ProtectedRoute";
+import NotificationBanner from "./components/NotificationBanner";
 
 export default function App() {
     return (
         <div className="container">
+            <NotificationBanner />
             <h1>🎓 SkillSwap Exchange</h1>
             <p>Connect students through skill exchange.</p>
 

@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { createSocket } from "../socket";
-import { useAuth } from "../context/AuthContext";
+import { useSocketContext } from "../context/SocketContext";
 
 // Public STUN only (no TURN) - works on the same network / localhost demo,
 // may fail to connect across restrictive NATs in a real deployment.
@@ -11,19 +10,30 @@ export default function CallPage() {
     const { userId } = useParams();
     const location = useLocation();
     const navigate = useNavigate();
-    const { token } = useAuth();
+    const { socketRef, clearNotificationsFor } = useSocketContext();
 
     const [callStatus, setCallStatus] = useState("connecting");
     const localVideoRef = useRef(null);
     const remoteVideoRef = useRef(null);
     const localStreamRef = useRef(null);
     const peerConnectionRef = useRef(null);
-    const socketRef = useRef(null);
 
     const otherName = location.state?.name || "Call";
 
     useEffect(() => {
         let cancelled = false;
+        const socket = socketRef.current;
+
+        clearNotificationsFor(userId);
+
+        if (!socket) return undefined;
+
+        let joinConversation;
+        let handlePeerJoined;
+        let handleCallOffer;
+        let handleCallAnswer;
+        let handleIceCandidate;
+        let handlePeerLeft;
 
         async function init() {
             const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
@@ -43,58 +53,65 @@ export default function CallPage() {
                 setCallStatus("connected");
             };
 
-            const socket = createSocket(token);
-            socketRef.current = socket;
-
             pc.onicecandidate = (event) => {
                 if (event.candidate) {
                     socket.emit("ice_candidate", { to: userId, candidate: event.candidate });
                 }
             };
 
-            socket.on("connect", () => {
-                socket.emit("join_call", { with_user_id: userId });
-            });
+            joinConversation = () => socket.emit("join_call", { with_user_id: userId });
 
-            socket.on("peer_joined", async () => {
+            handlePeerJoined = async () => {
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
                 socket.emit("call_offer", { to: userId, offer });
-            });
+            };
 
-            socket.on("call_offer", async ({ offer }) => {
+            handleCallOffer = async ({ offer }) => {
                 await pc.setRemoteDescription(new RTCSessionDescription(offer));
                 const answer = await pc.createAnswer();
                 await pc.setLocalDescription(answer);
                 socket.emit("call_answer", { to: userId, answer });
-            });
+            };
 
-            socket.on("call_answer", async ({ answer }) => {
+            handleCallAnswer = async ({ answer }) => {
                 await pc.setRemoteDescription(new RTCSessionDescription(answer));
-            });
+            };
 
-            socket.on("ice_candidate", async ({ candidate }) => {
+            handleIceCandidate = async ({ candidate }) => {
                 try {
                     await pc.addIceCandidate(new RTCIceCandidate(candidate));
                 } catch {
                     // ignore late/duplicate candidates
                 }
-            });
+            };
 
-            socket.on("peer_left", () => {
+            handlePeerLeft = () => {
                 setCallStatus("peer left");
                 if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
-            });
+            };
 
-            socket.connect();
+            socket.on("connect", joinConversation);
+            socket.on("peer_joined", handlePeerJoined);
+            socket.on("call_offer", handleCallOffer);
+            socket.on("call_answer", handleCallAnswer);
+            socket.on("ice_candidate", handleIceCandidate);
+            socket.on("peer_left", handlePeerLeft);
+
+            if (socket.connected) joinConversation();
         }
 
         init();
 
         return () => {
             cancelled = true;
-            socketRef.current?.emit("leave_call", { with_user_id: userId });
-            socketRef.current?.disconnect();
+            socket.emit("leave_call", { with_user_id: userId });
+            if (joinConversation) socket.off("connect", joinConversation);
+            if (handlePeerJoined) socket.off("peer_joined", handlePeerJoined);
+            if (handleCallOffer) socket.off("call_offer", handleCallOffer);
+            if (handleCallAnswer) socket.off("call_answer", handleCallAnswer);
+            if (handleIceCandidate) socket.off("ice_candidate", handleIceCandidate);
+            if (handlePeerLeft) socket.off("peer_left", handlePeerLeft);
             peerConnectionRef.current?.close();
             localStreamRef.current?.getTracks().forEach((t) => t.stop());
         };

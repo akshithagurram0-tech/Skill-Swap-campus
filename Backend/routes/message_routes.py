@@ -5,7 +5,7 @@ from werkzeug.utils import secure_filename
 from bson import ObjectId
 from bson.errors import InvalidId
 from config import UPLOAD_FOLDER, ALLOWED_UPLOAD_EXTENSIONS
-from database.db import messages
+from database.db import messages, users
 from extensions import socketio
 from models.message_model import serialize_message, new_file_message_document
 from services.chat_service import has_match_between, room_name
@@ -83,5 +83,12 @@ def upload_file():
         serialized,
         room=room_name(sender_object_id, receiver_object_id)
     )
+
+    sender = users.find_one({"_id": sender_object_id})
+    socketio.emit("message_notification", {
+        "from": str(sender_object_id),
+        "from_name": sender.get("name") if sender else "Someone",
+        "preview": f"Sent a file: {original_name}"
+    }, room=str(receiver_object_id))
 
     return jsonify(serialized)

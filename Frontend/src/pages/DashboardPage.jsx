@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api";
 import { useAuth } from "../context/AuthContext";
+import { useSocketContext } from "../context/SocketContext";
 
 export default function DashboardPage() {
     const { user, logout, updateUser } = useAuth();
+    const { notifications } = useSocketContext();
     const navigate = useNavigate();
 
     const [skillsOffered, setSkillsOffered] = useState([]);
@@ -180,6 +182,11 @@ export default function DashboardPage() {
                                 className="chat-link"
                             >
                                 💬 Chat with {match.with_user?.name}
+                                {notifications.filter((n) => n.userId === match.with_user?.id).length > 0 && (
+                                    <span className="match-badge">
+                                        {notifications.filter((n) => n.userId === match.with_user?.id).length}
+                                    </span>
+                                )}
                             </Link>
                             {match.status === "accepted" && (
                                 <Link

@@ -1,7 +1,9 @@
+from bson import ObjectId
 from flask import request
 from flask_socketio import emit, join_room, leave_room
 
 from extensions import socketio
+from database.db import users
 from services.chat_service import has_match_between, room_name
 from sockets.chat_socket import sid_to_user
 
@@ -20,6 +22,12 @@ def handle_join_call(data):
 
     join_room(call_room(my_id, other_id))
     emit("peer_joined", {"from": my_id}, room=call_room(my_id, other_id), skip_sid=request.sid)
+
+    caller = users.find_one({"_id": ObjectId(my_id)})
+    emit("incoming_call_notification", {
+        "from": my_id,
+        "from_name": caller.get("name") if caller else "Someone"
+    }, room=other_id)
 
 
 @socketio.on("call_offer")
